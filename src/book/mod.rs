@@ -287,15 +287,6 @@ impl MDBook {
     pub fn source_dir(&self) -> PathBuf {
         self.root.join(&self.config.book.src)
     }
-
-    // FIXME: This really belongs as part of the `HtmlConfig`.
-    #[doc(hidden)]
-    pub fn theme_dir(&self) -> PathBuf {
-        match self.config.html_config().and_then(|h| h.theme) {
-            Some(d) => self.root.join(d),
-            None => self.root.join("theme"),
-        }
-    }
 }
 
 /// Look at the `Config` and try to figure out what renderers to use.

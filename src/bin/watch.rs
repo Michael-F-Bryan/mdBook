@@ -1,6 +1,6 @@
 extern crate notify;
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use self::notify::Watcher;
 use std::time::Duration;
 use std::sync::mpsc::channel;
@@ -68,7 +68,11 @@ where
         ::std::process::exit(1);
     };
 
-    let _ = watcher.watch(book.theme_dir(), Recursive);
+    if let Ok(theme_dir) = book.config
+        .get_deserialized::<PathBuf, _>("output.html.theme")
+    {
+        let _ = watcher.watch(theme_dir, Recursive);
+    }
 
     // Add the book.toml file to the watcher if it exists
     let _ = watcher.watch(book.root.join("book.toml"), NonRecursive);
