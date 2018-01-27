@@ -1,4 +1,5 @@
-use std::path::PathBuf;
+use theme::Theme;
+use std::path::{Path, PathBuf};
 
 /// Configuration for tweaking how the the HTML renderer handles the playpen.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -50,4 +51,13 @@ pub struct HtmlConfig {
     pub livereload_url: Option<String>,
     /// Should section labels be rendered?
     pub no_section_label: bool,
+}
+
+impl HtmlConfig {
+    pub fn theme_dir(&self, root: &Path) -> PathBuf {
+        match self.theme.as_ref() {
+            Some(theme) => root.join(theme),
+            None => root.join("theme"),
+        }
+    }
 }

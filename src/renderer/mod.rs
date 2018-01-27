@@ -13,7 +13,7 @@
 
 pub use self::html_handlebars::HtmlHandlebars;
 
-mod html_handlebars;
+pub mod html_handlebars;
 
 use std::fs;
 use std::io::{self, Read};
@@ -162,17 +162,21 @@ impl Renderer for CmdRenderer {
             .stdout(Stdio::inherit())
             .stderr(Stdio::inherit())
             .current_dir(&ctx.destination)
-            .spawn() {
-                Ok(c) => c,
-                Err(ref e) if e.kind() == io::ErrorKind::NotFound => {
-                    warn!("The command wasn't found, is the \"{}\" backend installed?", self.name);
-                    warn!("\tCommand: {}", self.cmd);
-                    return Ok(());
-                }
-                Err(e) => {
-                    return Err(e).chain_err(|| "Unable to start the backend")?;
-                }
-            };
+            .spawn()
+        {
+            Ok(c) => c,
+            Err(ref e) if e.kind() == io::ErrorKind::NotFound => {
+                warn!(
+                    "The command wasn't found, is the \"{}\" backend installed?",
+                    self.name
+                );
+                warn!("\tCommand: {}", self.cmd);
+                return Ok(());
+            }
+            Err(e) => {
+                return Err(e).chain_err(|| "Unable to start the backend")?;
+            }
+        };
 
         {
             let mut stdin = child.stdin.take().expect("Child has stdin");
