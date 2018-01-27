@@ -6,6 +6,8 @@ mod config;
 
 pub use self::config::{HtmlConfig, Playpen};
 
+use std::fs::{self, File};
+use std::io::Write;
 use std::path::Path;
 use handlebars::Handlebars;
 use serde_json::value::{Map, Value};
@@ -16,8 +18,69 @@ use config::Config;
 use renderer::{RenderContext, Renderer};
 use renderer::html_handlebars::helpers::{next, previous, RenderToc};
 use errors::*;
+use utils;
+
+type JsonObject = Map<String, Value>;
 
 pub struct HtmlRenderer;
+
+impl HtmlRenderer {
+    /// Render all the chapters and write them to the output directory.
+    fn render_chapters(
+        &self,
+        book: &Book,
+        global_ctx: &JsonObject,
+        dest: &Path,
+        title: Option<&String>,
+    ) -> Result<()> {
+        for item in book.iter() {
+            if let BookItem::Chapter(ref ch) = *item {
+                let content = self.render_chapter(ch, global_ctx, title)
+                    .chain_err(|| format!("Unable to render \"{}\"", ch.name))?;
+
+                let output_file = dest.join(&ch.path);
+                write_all(&output_file, &content).chain_err(|| {
+                    format!(
+                        "Writing chapter content to \"{}\" failed",
+                        output_file.display()
+                    )
+                })?;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Render a single chapter as HTML.
+    fn render_chapter(
+        &self,
+        ch: &Chapter,
+        global_ctx: &JsonObject,
+        book_title: Option<&String>,
+    ) -> Result<String> {
+        let title = match book_title {
+            Some(book_title) => format!("{} - {}", book_title, ch.name),
+            None => ch.name.clone(),
+        };
+
+        let mut chapter_ctx = json!({
+            "path": ch.path,
+            "content": ch.content,
+            "chapter_title": ch.name,
+            "title": title,
+            "path_to_root": utils::fs::path_to_root(&ch.path),
+        });
+
+        // update the render context with our book's global information
+        match chapter_ctx {
+            Value::Object(ref mut obj) => obj.extend(global_ctx.clone()),
+            _ => unreachable!(),
+        }
+
+        // TODO: Pass this through pulldown-cmark and transform stuff appropriately
+        unimplemented!()
+    }
+}
 
 impl Renderer for HtmlRenderer {
     fn name(&self) -> &str {
@@ -40,6 +103,13 @@ impl Renderer for HtmlRenderer {
         let theme_dir = cfg.theme_dir(&ctx.root);
         let static_assets = Theme::new(theme_dir);
         let hbs = load_handlebars_engine(&static_assets, &cfg)?;
+
+        self.render_chapters(
+            &ctx.book,
+            &global_ctx,
+            &ctx.destination,
+            ctx.config.book.title.as_ref(),
+        )?;
 
         unimplemented!()
     }
@@ -64,7 +134,7 @@ fn load_handlebars_engine(assets: &Theme, cfg: &HtmlConfig) -> Result<Handlebars
     Ok(hbs)
 }
 
-fn construct_global_context(cfg: &Config, html_config: &HtmlConfig, book: &Book) -> Value {
+fn construct_global_context(cfg: &Config, html_config: &HtmlConfig, book: &Book) -> JsonObject {
     let title = cfg.book.title.as_ref();
     let description = cfg.book.description.as_ref();
     let authors = cfg.book.authors.as_slice();
@@ -103,7 +173,10 @@ fn construct_global_context(cfg: &Config, html_config: &HtmlConfig, book: &Book)
         }
     }
 
-    context
+    match context {
+        Value::Object(obj) => obj,
+        _ => unreachable!(),
+    }
 }
 
 /// Inspects the book and creates a simplified schematic of its contents. Mainly
@@ -132,6 +205,22 @@ fn create_toc_info(book: &Book) -> Value {
     }
 
     Value::Array(chapters)
+}
+
+fn write_all<P: AsRef<Path>, D: AsRef<[u8]>>(location: P, data: D) -> Result<()> {
+    let location = location.as_ref();
+    let data = data.as_ref();
+
+    if let Some(parent) = location.parent() {
+        fs::create_dir_all(parent).chain_err(|| "Unable to create parent directories")?;
+    }
+
+    File::create(location)
+        .chain_err(|| "Couldn't open the file for writing")?
+        .write_all(data)
+        .chain_err(|| "Error encountered writing data")?;
+
+    Ok(())
 }
 
 #[cfg(test)]
